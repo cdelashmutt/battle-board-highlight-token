@@ -95,22 +95,28 @@ async function isCombatStarted(): Promise<boolean> {
   }
 }
 
-function getTokenFootprintPx(token: Item): { w: number; h: number } {
+function getTokenFootprintPx(token: Item, sceneDpi: number): { w: number; h: number } {
   if (isImage(token)) {
     const img = token as unknown as {
       image?: { width?: number; height?: number };
+      grid?: { dpi?: number };
       scale?: { x?: number; y?: number };
     };
     const naturalW = img.image?.width ?? 0;
     const naturalH = img.image?.height ?? 0;
+    const imageDpi = img.grid?.dpi ?? sceneDpi;
     if (naturalW > 0 && naturalH > 0) {
       const scaleX = Math.abs(img.scale?.x ?? 1);
       const scaleY = Math.abs(img.scale?.y ?? 1);
-      return { w: naturalW * scaleX, h: naturalH * scaleY };
+      // Convert image pixels → grid squares → scene pixels
+      return {
+        w: (naturalW / imageDpi) * sceneDpi * scaleX,
+        h: (naturalH / imageDpi) * sceneDpi * scaleY,
+      };
     }
   }
-  // Fallback: assume a standard 1-cell token at 150 dpi
-  return { w: 150, h: 150 };
+  // Fallback: assume a standard 1-cell token
+  return { w: sceneDpi, h: sceneDpi };
 }
 
 // --- Highlight management ---
@@ -133,7 +139,10 @@ async function syncHighlights(): Promise<void> {
   }
 
   const started = await isCombatStarted();
-  const allItems = await OBR.scene.items.getItems();
+  const [allItems, sceneDpi] = await Promise.all([
+    OBR.scene.items.getItems(),
+    OBR.scene.grid.getDpi(),
+  ]);
 
   if (!started) {
     await removeAllHighlights(allItems);
@@ -173,7 +182,7 @@ async function syncHighlights(): Promise<void> {
   const toUpdateSizes: Array<{ w: number; h: number }> = [];
 
   for (const token of activeTokens) {
-    const { w, h } = getTokenFootprintPx(token);
+    const { w, h } = getTokenFootprintPx(token, sceneDpi);
     const ringW = w * 1.15;
     const ringH = h * 1.15;
     const existing = highlightByOwner.get(token.id);
