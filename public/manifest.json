@@ -4,11 +4,11 @@
   "manifest_version": 1,
   "author": "cdelashmutt",
   "description": "Highlights the token whose turn is active in Battle Board's initiative tracker.",
-  "icon": "./icon.svg",
+  "icon": "https://cdelashmutt.github.io/battle-board-highlight-token/icon.svg",
   "action": {
     "title": "Turn Highlighter",
-    "icon": "./icon.svg",
-    "popover": "./",
+    "icon": "https://cdelashmutt.github.io/battle-board-highlight-token/icon.svg",
+    "popover": "https://cdelashmutt.github.io/battle-board-highlight-token/",
     "height": 200,
     "width": 300
   }
