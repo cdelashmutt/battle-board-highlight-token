@@ -38,6 +38,25 @@ const DEFAULT_SETTINGS: Settings = {
 
 let currentSettings: Settings = { ...DEFAULT_SETTINGS };
 
+// --- Scene cache ---
+
+let cachedDpi: number = 150;
+let cachedCombatStarted: boolean = false;
+
+async function refreshSceneCache(): Promise<void> {
+  try {
+    const [dpi, sceneMeta] = await Promise.all([
+      OBR.scene.grid.getDpi(),
+      OBR.scene.getMetadata(),
+    ]);
+    cachedDpi = dpi;
+    const state = (sceneMeta as Record<string, unknown>)[BB_SCENE_KEY] as SceneState | undefined;
+    cachedCombatStarted = state?.started === true;
+  } catch {
+    // Keep existing cached values
+  }
+}
+
 // --- Debounce ---
 
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -49,7 +68,7 @@ function scheduleSyncHighlights() {
     syncHighlights().catch((err) => {
       console.error("[TurnHighlighter] syncHighlights error:", err);
     });
-  }, 50);
+  }, 10);
 }
 
 // --- Settings helpers ---
@@ -85,15 +104,6 @@ function getActiveMeta(item: Item): BattleBoardMeta | null {
   return null;
 }
 
-async function isCombatStarted(): Promise<boolean> {
-  try {
-    const sceneMeta = await OBR.scene.getMetadata();
-    const state = (sceneMeta as Record<string, unknown>)[BB_SCENE_KEY] as SceneState | undefined;
-    return state?.started === true;
-  } catch {
-    return false;
-  }
-}
 
 function getTokenFootprintPx(token: Item, sceneDpi: number): { w: number; h: number } {
   if (isImage(token)) {
@@ -138,13 +148,9 @@ async function syncHighlights(): Promise<void> {
     return;
   }
 
-  const started = await isCombatStarted();
-  const [allItems, sceneDpi] = await Promise.all([
-    OBR.scene.items.getItems(),
-    OBR.scene.grid.getDpi(),
-  ]);
+  const allItems = await OBR.scene.items.getItems();
 
-  if (!started) {
+  if (!cachedCombatStarted) {
     await removeAllHighlights(allItems);
     return;
   }
@@ -182,7 +188,7 @@ async function syncHighlights(): Promise<void> {
   const toUpdateSizes: Array<{ w: number; h: number }> = [];
 
   for (const token of activeTokens) {
-    const { w, h } = getTokenFootprintPx(token, sceneDpi);
+    const { w, h } = getTokenFootprintPx(token, cachedDpi);
     const ringW = w * 1.15;
     const ringH = h * 1.15;
     const existing = highlightByOwner.get(token.id);
@@ -272,7 +278,7 @@ function initSettingsUI(): void {
 // --- Entry point ---
 
 OBR.onReady(async () => {
-  currentSettings = await loadSettings();
+  [currentSettings] = await Promise.all([loadSettings(), refreshSceneCache()]);
   initSettingsUI();
 
   // Initial sync
@@ -282,7 +288,11 @@ OBR.onReady(async () => {
   OBR.scene.items.onChange(() => scheduleSyncHighlights());
 
   // Re-sync when scene metadata changes (combat started/stopped, round changed)
-  OBR.scene.onMetadataChange(() => scheduleSyncHighlights());
+  // Also refresh the cache so syncHighlights picks up the new combat state immediately
+  OBR.scene.onMetadataChange(async () => {
+    await refreshSceneCache();
+    scheduleSyncHighlights();
+  });
 
   // Re-sync when room metadata changes (our own settings updated from another client)
   OBR.room.onMetadataChange(async () => {
