@@ -1,0 +1,15 @@
+{
+  "name": "Turn Highlighter",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "author": "cdelashmutt",
+  "description": "Highlights the token whose turn is active in Battle Board's initiative tracker.",
+  "icon": "./icon.svg",
+  "action": {
+    "title": "Turn Highlighter",
+    "icon": "./icon.svg",
+    "popover": "./",
+    "height": 200,
+    "width": 300
+  }
+}
